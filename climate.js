@@ -3,6 +3,7 @@
   'use strict';
   const TZ = '&timezone=Asia%2FBangkok';
   const ORDER = ['hcm', 'cantho', 'hanoi', 'hue', 'danang'];
+  const SEOUL = [126.978, 37.5665];      // 같은 날 비교용(지도에는 칠하지 않음)
   const WHO_PM25 = 15; // WHO 대기질 지침(2021) PM2.5 24시간 기준
   // 미국 환경보호청 PM2.5 단계(2024 개정, 24시간 평균 기준)
   const AIR_CAT = [[0, 'aq0', '#2fbf71'], [9.05, 'aq1', '#e9c13a'], [35.45, 'aq2', '#f08c2e'], [55.45, 'aq3', '#e5484d'], [125.45, 'aq4', '#8e44ad'], [225.45, 'aq5', '#6b1d3a']];
@@ -43,7 +44,7 @@
   async function load(mode) {
     if (C.data[mode]) return C.data[mode];
     if (!grid) grid = await fetch('data/grid.json').then(r => r.json());
-    const pts = ORDER.map(k => F.S.cities[k].center);
+    const pts = ORDER.map(k => F.S.cities[k].center).concat([SEOUL]);
     const cLat = pts.map(c => c[1]).join(','), cLon = pts.map(c => c[0]).join(',');
     const gLat = grid.lat.join(','), gLon = grid.lon.join(',');
     let G, Cy;
@@ -74,6 +75,7 @@
       else { o.temp = h.temperature_2m; o.rh = h.relative_humidity_2m; o.uv = Cy[i].daily; }
       D.city[k] = o;
     });
+    { const h = Cy[ORDER.length].hourly; D.city.seoul = { times: h.time, v: val(h), aqi: h.us_aqi, temp: h.temperature_2m, rh: h.relative_humidity_2m, uv: Cy[ORDER.length].daily }; }
     // 오늘(현지 0~23시) 값으로 지점별 하루 지표를 만든다
     const today = F.vnNow().slice(0, 10);
     const ti = times.map((tm, i) => tm.startsWith(today) ? i : -1).filter(i => i >= 0);
@@ -230,6 +232,20 @@
       return `<li style="animation-delay:${i * 40}ms"><button data-city="${r.c}" class="${r.c === k ? 'on' : ''}"><span class="rk">${i + 1}</span><span class="rn">${F.esc(F.t('city_' + r.c))}</span><span class="rb"><i style="width:${Math.max(4, r.s.day / max * 100)}%;background:${c[2]}"></i></span><span class="rv">${F.fmt(r.s.day, mode === 'air' ? 1 : 0)}<small>${u}</small></span><span class="rc" style="--c:${c[2]}">${F.esc(F.t(c[1]))}${ratio != null && ratio >= 1.05 ? ' · ' + F.t('xWho', { x: F.fmt(ratio, 1) }) : ''}</span></button></li>`;
     }).join('');
     F.$$('#clRank [data-city]').forEach(b => b.addEventListener('click', () => F.pickCity(b.dataset.city)));
+    renderVs(mode, k, st);
+  }
+  // 같은 시간대(베트남 기준 오늘 0~23시) 서울 값과 비교
+  function renderVs(mode, k, st) {
+    const box = F.$('#clVs'); if (!C.data[mode].city.seoul) { box.hidden = true; return; }
+    const se = cityStats(mode, 'seoul'), u = mode === 'air' ? 'µg/m³' : '°C', d = mode === 'air' ? 1 : 0;
+    const a = st.day, b = se.day, max = Math.max(a, b, mode === 'air' ? WHO_PM25 : 1) * 1.08;
+    const ca = cat(mode, a), cb = cat(mode, b);
+    let msg;
+    if (mode === 'air') msg = a >= b * 1.05 ? F.t('vsAirX', { city: F.t('city_' + k), x: `<b>${F.fmt(a / b, 1)}</b>` }) : F.t('vsAirLow', { city: F.t('city_' + k) });
+    else msg = a - b >= 1 ? F.t('vsHeatD', { city: F.t('city_' + k), d: `<b>${F.fmt(a - b, 0)}°C</b>` }) : F.t('vsHeatLow', { city: F.t('city_' + k) });
+    const bar = (n, v, c, me) => `<div class="vs-r ${me ? 'me' : ''}"><span class="vn">${F.esc(n)}</span><span class="vb"><i style="width:${Math.max(3, v / max * 100)}%;background:${c[2]}"></i></span><span class="vv">${F.fmt(v, d)}<small>${u}</small></span></div>`;
+    box.hidden = false;
+    box.innerHTML = `<h3>${F.esc(F.t(mode === 'air' ? 'vsAirT' : 'vsHeatT'))}</h3><p class="vs-msg">${msg}</p>${bar(F.t('city_' + k), a, ca, true)}${bar(F.t('city_seoul'), b, cb, false)}<small class="vs-note">${F.esc(F.t('vsNote'))}</small>`;
   }
   const uvCat = v => v >= 11 ? 'uv4' : v >= 8 ? 'uv3' : v >= 6 ? 'uv2' : v >= 3 ? 'uv1' : 'uv0';
 

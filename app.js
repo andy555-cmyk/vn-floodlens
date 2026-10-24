@@ -13,7 +13,7 @@
   const S = {
     lang: pickLang(), city: ORDER.includes(qs.get('city')) ? qs.get('city') : 'hcm',
     lv: 0, lvShown: -1, listType: 'hospital', cities: null, data: {}, live: {}, roadsOn: true, is3d: false,
-    mode: ['air', 'heat'].includes(qs.get('mode')) ? qs.get('mode') : 'flood', floodCity: null
+    mode: ['air', 'heat', 'storm', 'soc'].includes(qs.get('mode')) ? qs.get('mode') : 'flood', floodCity: null
   };
   const FLOOD_LAYERS = ['flood', 'bbox', 'roads', 'roads-glow', 'pois', 'pois-wet', 'poi-halo'];
 
@@ -316,9 +316,10 @@
       map.on('mouseleave', id, () => { map.getCanvas().style.cursor = ''; pop.remove(); });
     });
     map.on('click', async e => {
+      if (S.mode === 'storm') return;
       if (S.mode !== 'flood') {
         if (openPop) openPop.remove();
-        const h = CL.probe(e.lngLat.lng, e.lngLat.lat);
+        const h = S.mode === 'soc' ? SC.probe(e.lngLat.lng, e.lngLat.lat) : CL.probe(e.lngLat.lng, e.lngLat.lat);
         if (h) { openPop = new maplibregl.Popup({ offset: 8, className: 'pop', maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(h).addTo(map); ripple(e.point); }
         return;
       }
@@ -332,6 +333,10 @@
       padding: () => padding(true), setHero, bootDone: () => $('#boot').classList.add('gone'),
       pickCity: k => { if (k !== S.city) selectCity(k); }
     });
+    const RF = { map, S, t, fmt, esc, $, $$, loc, MOTION, getJson, vnNow, tween, metersBetween, elevAtAsync, padding: () => padding(), animateTo };
+    RK.init(RF);
+    ST.init({ ...RF, setHero, bootDone: () => $('#boot').classList.add('gone'), firstSymbol });
+    SC.init({ ...RF, setHero, bootDone: () => $('#boot').classList.add('gone'), firstSymbol });
     setMode(S.mode, true);
   }
   function fc(f) { return { type: 'FeatureCollection', features: f }; }
@@ -362,12 +367,15 @@
       const wet = e <= Math.floor(S.lv);
       h += `<span class="pe ${wet ? 'wet' : 'dry'}">${t(wet ? 'pWet' : 'pDry', { lv: fmt(S.lv, 1) })}</span>`;
     }
+    const rpBtn = `<button class="rp-btn" data-rp><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/></svg>${t('rpBtn')}</button>`;
     if (D) {
       let best = null, bd = Infinity;
       D.pois.forEach(p => { if (p.t !== 'hospital') return; const d = metersBetween(pt, p.c); if (d < bd) { bd = d; best = p; } });
       if (best && bd < 15000) h += `<div class="near"><small>${t('pNear')}</small><b>${esc(best.n || t('tHospital'))}</b><span>${t('pDist', { d: bd < 1000 ? fmt(bd, 0) + ' m' : fmt(bd / 1000, 1) + ' km', e: best.e })}</span></div>`;
     }
-    openPop = new maplibregl.Popup({ offset: 8, className: 'pop', maxWidth: '300px' }).setLngLat(pt).setHTML(h).addTo(map);
+    openPop = new maplibregl.Popup({ offset: 8, className: 'pop', maxWidth: '300px' }).setLngLat(pt).setHTML(h + rpBtn).addTo(map);
+    const rb = openPop.getElement().querySelector('[data-rp]');
+    if (rb) rb.addEventListener('click', () => { openPop.remove(); RK.report(pt); });
     ripple(map.project(pt));
   }
   function ripple(p) {
@@ -391,7 +399,8 @@
   async function selectCity(key, first) {
     S.city = key;
     renderCities(); syncUrl();
-    if (S.mode !== 'flood') { if (openPop) openPop.remove(); CL.onCity(); return; }
+    RK.onCity();
+    if (S.mode !== 'flood') { if (openPop) openPop.remove(); if (S.mode === 'storm') ST.onCity(); else if (S.mode === 'soc') SC.onCity(); else CL.onCity(); return; }
     const seq = ++loadSeq;
     const c = S.cities[key];
     $('#lv').max = MAXLV[key];
@@ -400,7 +409,7 @@
     if (openPop) openPop.remove();
     const pad = padding();
     map.flyTo({ center: c.center, zoom: c.zoom - (innerWidth < 900 ? 0.6 : 0), duration: MOTION ? (first ? 3800 : 2200) : 0, padding: pad, essential: true, pitch: S.is3d ? 55 : 0 });
-    const [D, L] = await Promise.all([prepareCity(key), loadLive(key).catch(() => ({}))]);
+    const [D, L] = await Promise.all([prepareCity(key), loadLive(key).catch(() => ({})), RK.load(key), RK.loadSlr()]);
     if (seq !== loadSeq || S.mode !== 'flood') return;
     const [w, s, e, n] = c.bbox;
     map.getSource('bbox').setData(fc([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] } }]));
@@ -409,7 +418,7 @@
     S.floodCity = key;
     document.body.classList.remove('loading');
     $('#boot').classList.add('gone');
-    renderLive(); renderHero(); renderSources();
+    renderLive(); renderHero(); renderSources(); RK.onReady();
     const target = L && L.tide ? Math.floor(L.tide.peak * 10) / 10 : Math.min(MAXLV[key], Math.max(1, D.median - 2));
     $('#btnTide').hidden = !(L && L.tide);
     placeTideMark();
@@ -434,11 +443,11 @@
     syncUrl();
     if (openPop) openPop.remove();
     if (m === 'flood') {
-      CL.leave();
+      CL.leave(); ST.leave(); SC.leave();
       FLOOD_LAYERS.forEach(id => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', (id === 'roads' || id === 'roads-glow') && !S.roadsOn ? 'none' : 'visible'));
       renderLegend();
       if (S.floodCity === S.city && S.data[S.city]) {
-        renderHero(); renderSources();
+        renderHero(); renderSources(); RK.update();
         const c = S.cities[S.city];
         map.flyTo({ center: c.center, zoom: c.zoom - (innerWidth < 900 ? 0.6 : 0), duration: MOTION ? 1800 : 0, padding: padding(), essential: true });
       } else selectCity(S.city, first);
@@ -446,8 +455,11 @@
       if (prev === 'flood' || first) {
         FLOOD_LAYERS.forEach(id => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', 'none'));
         if (S.is3d) $('#btn3d').click();
+        RK.leave();
       }
-      CL.enter(m, first);
+      const OTHER = { storm: ST, soc: SC };
+      [CL, ST, SC].forEach(x => { if (x !== (OTHER[m] || CL)) x.leave(); });
+      if (OTHER[m]) OTHER[m].enter(first); else CL.enter(m, first);
     }
   }
   function syncUrl() {
@@ -509,6 +521,7 @@
     });
     tween($('#kRoad'), roadBelow(D, S.lv), 0);
     $$('.kpi').forEach(b => b.classList.toggle('on', b.dataset.type === S.listType));
+    RK.update();
     renderList();
   }
   function renderList() {
@@ -558,6 +571,8 @@
       const p = D.land ? landBelow(D, L.tide.peak) / D.land * 100 : 0;
       h = t('hTide', { city, p: `<em>${fmt(p, 0)}</em>` });
       s = t('sTide', { t: when(L.tide.peakAt), v: fmt(L.tide.peak, 2) });
+      const pp = RK.peopleBelow(S.city, L.tide.peak);
+      if (pp) s += ' ' + t('sPop', { n: RK.compact(pp) });
     } else {
       h = t('hInland', { city, m: `<em>${fmt(D.median, 0)}</em>` });
       s = t('sInland');
@@ -574,13 +589,13 @@
   function renderSources() {
     const D = S.data[S.city];
     const d = D && D.osmDate ? D.osmDate.slice(0, 4) + '-' + D.osmDate.slice(4, 6) + '-' + D.osmDate.slice(6, 8) : '';
-    $('#srcs').innerHTML = ['src1', 'src2', 'src3', 'src4'].map(k => `<li>${esc(t(k, { d }))}</li>`).join('');
-    $('#caveat').textContent = t('caveat');
+    $('#srcs').innerHTML = ['src1', 'src2', 'src3', 'src4', 'src5', 'src6', 'src7'].map(k => `<li>${esc(t(k, { d }))}</li>`).join('');
+    $('#caveat').textContent = t('caveat') + ' ' + t('cavRisk');
   }
   function renderLegend() {
     $('#legend').innerHTML = `
       <div class="lg-row"><span class="lg-k">${t('lgDepth')}</span><span class="lg-grad"></span><span class="lg-s">0 → 5 m+</span></div>
-      <div class="lg-row"><span><i class="dot hospital"></i>${t('lgHosp')}</span><span><i class="dot school"></i>${t('lgSchool')}</span><span><i class="dot police"></i>${t('lgPolice')}</span><span><i class="ln"></i>${t('lgRoad')}</span></div>`;
+      <div class="lg-row"><span><i class="dot hospital"></i>${t('lgHosp')}</span><span><i class="dot school"></i>${t('lgSchool')}</span><span><i class="dot police"></i>${t('lgPolice')}</span><span><i class="ln"></i>${t('lgRoad')}</span><span><i class="sq iso"></i>${t('lgIso')}</span></div>`;
   }
   function applyLang() {
     document.documentElement.lang = S.lang;
@@ -590,17 +605,17 @@
     if (S.cities) renderCities();
     if (map && map.isStyleLoaded()) localize();
     const fl = S.mode === 'flood';
-    if (fl) renderLegend(); else CL.onLang();
+    if (fl) { renderLegend(); RK.onLang(); } else if (S.mode === 'storm') ST.onLang(); else if (S.mode === 'soc') SC.onLang(); else CL.onLang();
     if (S.data[S.city] && S.floodCity === S.city) { renderLive(); placeTideMark(); updateImpact(); $('#lvNum').textContent = fmt(S.lv, 1); if (fl) { renderHero(); renderSources(); } }
   }
 
   /* ---------------- 조작 ---------------- */
   $$('[data-lang]').forEach(b => b.addEventListener('click', () => { S.lang = b.dataset.lang; applyLang(); }));
   $$('#modes [data-mode]').forEach(b => b.addEventListener('click', () => { if (map && booted && b.dataset.mode !== S.mode) setMode(b.dataset.mode); }));
-  $('#lv').addEventListener('input', e => { cancelAnimationFrame(raf); anim++; setLevel(+e.target.value); });
+  $('#lv').addEventListener('input', e => { cancelAnimationFrame(raf); anim++; RK.onUserLevel(); setLevel(+e.target.value); });
   $('#lv').addEventListener('change', () => updateImpact());
-  $('#btnPlay').addEventListener('click', () => { setLevel(0, true); updateImpact(); setTimeout(() => animateTo(MAXLV[S.city], 6500), 150); });
-  $('#btnTide').addEventListener('click', () => { const L = S.live[S.city]; if (L && L.tide) animateTo(Math.floor(L.tide.peak * 10) / 10, 1400); });
+  $('#btnPlay').addEventListener('click', () => { RK.onUserLevel(); setLevel(0, true); updateImpact(); setTimeout(() => animateTo(MAXLV[S.city], 6500), 150); });
+  $('#btnTide').addEventListener('click', () => { RK.onUserLevel(); const L = S.live[S.city]; if (L && L.tide) animateTo(Math.floor(L.tide.peak * 10) / 10, 1400); });
   $$('.kpi').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.type === 'road') { toggleRoads(true); return; }
     S.listType = b.dataset.type; updateImpact();
@@ -628,5 +643,5 @@
   $$('#modes [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
   applyLang();
   fetch('data/cities.json').then(r => r.json()).then(c => { S.cities = c; renderCities(); initMap(); });
-  window.__fl = { S, setLevel, animateTo, selectCity, elevAt, landBelow };
+  window.__fl = { S, setLevel, animateTo, selectCity, elevAt, landBelow, setMode: m => setMode(m) };
 })();
