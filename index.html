@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vietnam FloodLens</title>
+<meta name="description" content="Real terrain, live tide, rain and river data — which hospitals, schools and roads go under water in Vietnamese cities.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" href="./" aria-label="Vietnam FloodLens">
+      <span class="logo" aria-hidden="true"><i></i></span>
+      <span class="brand-t"><b>FloodLens</b><small data-i="brandSub"></small></span>
+    </a>
+    <nav class="cities" id="cities" role="tablist"></nav>
+    <div class="lang" role="group" aria-label="language">
+      <button data-lang="ko">KO</button><button data-lang="vi">VI</button><button data-lang="en">EN</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div id="map" class="map"></div>
+
+    <div class="hero" id="hero">
+      <div class="live-dot"><i></i><span data-i="live"></span></div>
+      <h1 id="headline"></h1>
+      <p id="subline"></p>
+    </div>
+
+    <div class="map-tools">
+      <button id="btn3d" class="tool" aria-pressed="false"><span>3D</span></button>
+      <button id="btnRoads" class="tool on" aria-pressed="true"><span data-i="roads"></span></button>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <aside class="panel" id="panel">
+      <section class="sec live">
+        <div class="sec-h"><h2 data-i="nowTitle"></h2><span class="upd" id="upd"></span></div>
+        <div class="cards3">
+          <article class="lc" id="lcTide"></article>
+          <article class="lc" id="lcRain"></article>
+          <article class="lc" id="lcRiver"></article>
+        </div>
+      </section>
+
+      <section class="sec water">
+        <div class="sec-h"><h2 data-i="waterTitle"></h2></div>
+        <p class="lead" data-i="waterLead"></p>
+        <div class="lvl">
+          <div class="lvl-num"><b id="lvNum">0.0</b><span>m</span><small data-i="asl"></small></div>
+          <div class="lvl-btns">
+            <button id="btnPlay" class="btn-dark"><i class="ic-play"></i><span data-i="play"></span></button>
+            <button id="btnTide" class="btn-line" hidden><span data-i="setTide"></span></button>
+          </div>
+        </div>
+        <div class="slider">
+          <input type="range" id="lv" min="0" max="6" step="0.1" value="0" aria-label="water level">
+          <div class="ticks" aria-hidden="true"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6 m</span></div>
+          <div class="tide-mark" id="tideMark" hidden><i></i><span id="tideMarkT"></span></div>
+        </div>
+      </section>
+
+      <section class="sec impact">
+        <div class="sec-h"><h2 data-i="impactTitle"></h2><span class="chip" id="impactLv"></span></div>
+        <div class="kpi-big">
+          <div class="kb-v"><b id="kArea">0</b><span>km²</span></div>
+          <div class="kb-t"><span data-i="kArea"></span><div class="bar"><i id="kAreaBar"></i></div><small id="kAreaPct"></small></div>
+        </div>
+        <div class="kpis">
+          <button class="kpi" data-type="hospital"><i class="dot hospital"></i><b id="kHospital">0</b><span data-i="tHospital"></span><small id="kHospitalOf"></small></button>
+          <button class="kpi" data-type="school"><i class="dot school"></i><b id="kSchool">0</b><span data-i="tSchool"></span><small id="kSchoolOf"></small></button>
+          <button class="kpi" data-type="police"><i class="dot police"></i><b id="kPolice">0</b><span data-i="tPolice"></span><small id="kPoliceOf"></small></button>
+          <button class="kpi" data-type="road"><i class="dot road"></i><b id="kRoad">0</b><span data-i="tRoad"></span><small>km</small></button>
+        </div>
+      </section>
+
+      <section class="sec list">
+        <div class="sec-h"><h2 id="listTitle"></h2></div>
+        <ol class="flist" id="flist"></ol>
+      </section>
+
+      <section class="sec src">
+        <details>
+          <summary data-i="srcTitle"></summary>
+          <ul class="srcs" id="srcs"></ul>
+          <p class="caveat" data-i="caveat"></p>
+        </details>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<div class="boot" id="boot"><div class="boot-in"><span class="logo big" aria-hidden="true"><i></i></span><p data-i="loading"></p></div></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
