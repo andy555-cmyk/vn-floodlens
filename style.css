@@ -172,6 +172,75 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .boot-in .logo { margin: 0 auto 14px; }
 body.loading .panel .sec:not(.water) { opacity: .45; transition: opacity .3s; }
 
+
+/* 모드 */
+.modes { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--ink); flex: none; }
+.modes button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 10px; background: none; color: #cbd5e1; font-size: 15px; font-weight: 700; white-space: nowrap; transition: background .2s, color .2s; }
+.modes button:hover { color: #fff; }
+.modes button.on { background: #fff; color: var(--ink); }
+.modes svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+body:not([data-mode="flood"]) .fl, body[data-mode="flood"] .clim { display: none; }
+body:not([data-mode="flood"]) .map-tools { display: none; }
+body[data-mode="air"] .hero h1 em { color: #e5484d; }
+body[data-mode="heat"] .hero h1 em { color: #e8590c; }
+body[data-mode="air"] .live-dot, body[data-mode="heat"] .live-dot { color: var(--ink2); }
+
+/* 도시 표지 */
+.cmk { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: none; cursor: pointer; transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+.cmk b { display: flex; align-items: baseline; gap: 2px; padding: 4px 9px; border-radius: 10px; background: var(--c); color: #fff; font-size: 16px; font-weight: 800; line-height: 1.2; box-shadow: 0 6px 16px rgba(15, 23, 42, .25); font-variant-numeric: tabular-nums; transition: background .3s; }
+.cmk b small { font-size: 13px; font-weight: 600; opacity: .9; }
+.cmk span { padding: 1px 7px; border-radius: 6px; background: rgba(255, 255, 255, .92); color: var(--ink); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.cmk:hover { transform: scale(1.06); }
+.cmk.on { transform: scale(1.18); z-index: 2; }
+.cmk.on b { outline: 3px solid #fff; }
+.cmk[hidden] { display: none; }
+
+/* 기후 패널 */
+.cl-big { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; }
+.cl-big b { font-size: 54px; line-height: 1; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.cl-big span { font-size: 18px; font-weight: 700; color: var(--ink2); }
+.cl-big .cat { margin-left: auto; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--c) 14%, #fff); color: color-mix(in srgb, var(--c) 75%, #000); font-size: 14px; font-style: normal; font-weight: 800; }
+.cl-cap { display: block; margin: 6px 0 4px; font-size: 13px; color: var(--muted); }
+.cl-chart { display: block; width: 100%; height: auto; margin: 6px 0 10px; overflow: visible; }
+.cl-chart .ax { font-size: 13px; fill: var(--muted); font-family: var(--font); }
+.cl-chart .ref { fill: var(--ink2); font-weight: 700; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+.cl-chart .draw2 { stroke-dasharray: 1400; animation: dash2 1.6s ease both; }
+@keyframes dash2 { from { stroke-dashoffset: 1400; } to { stroke-dashoffset: 0; } }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
+.facts div { padding: 10px 12px; border-radius: 12px; background: var(--soft); }
+.facts dt { font-size: 13px; color: var(--muted); font-weight: 600; }
+.facts dd { margin: 2px 0 0; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.cl-time { display: flex; align-items: center; gap: 12px; }
+.btn-dark.round { width: 48px; min-width: 48px; height: 48px; padding: 0; border-radius: 50%; }
+.ic-pause { display: none; width: 12px; height: 14px; border-left: 4px solid #fff; border-right: 4px solid #fff; }
+#clPlay.on .ic-play { display: none; }
+#clPlay.on .ic-pause { display: block; }
+.cl-tl { flex: 1; min-width: 0; }
+.cl-tl b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.cl-tl small { display: block; font-size: 13px; color: var(--muted); }
+.btn-line.sm { min-height: 40px; padding: 0 14px; font-size: 14px; }
+.cl-slider { padding: 10px 0 4px; }
+
+.cl-share { margin: -4px 0 12px; padding: 12px 14px; border-radius: 12px; background: #fff5f0; font-size: 15px; color: var(--ink); }
+.cl-share b { font-size: 18px; color: #c2410c; }
+.rank { list-style: none; margin: 0; padding: 0; }
+.rank li { animation: rise .4s both; }
+.rank button { display: grid; grid-template-columns: 22px auto 1fr auto; grid-template-areas: 'k n b v' 'k c c c'; align-items: center; gap: 2px 10px; width: 100%; margin-bottom: 6px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: #fff; text-align: left; transition: border-color .2s, transform .15s; }
+.rank button:hover { transform: translateX(2px); border-color: var(--ink2); }
+.rank button.on { border-color: var(--ink); }
+.rank .rk { grid-area: k; font-size: 15px; font-weight: 800; color: var(--muted); }
+.rank .rn { grid-area: n; font-size: 15px; font-weight: 700; white-space: nowrap; }
+.rank .rb { grid-area: b; height: 8px; border-radius: 4px; background: var(--soft); overflow: hidden; }
+.rank .rb i { display: block; height: 100%; border-radius: 4px; transition: width .6s; }
+.rank .rv { grid-area: v; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rank .rv small { margin-left: 2px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.rank .rc { grid-area: c; font-size: 13px; font-weight: 700; color: color-mix(in srgb, var(--c) 75%, #000); }
+
+.lg-bar { width: 230px; height: 10px; border-radius: 5px; }
+.lg-ticks { display: flex; justify-content: space-between; width: 230px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pop .sm { margin-top: 4px; font-size: 13px; color: var(--muted); }
+
 /* 좁은 화면 */
 @media (max-width: 1240px) {
   .panel { width: 420px; }
@@ -180,11 +249,19 @@ body.loading .panel .sec:not(.water) { opacity: .45; transition: opacity .3s; }
   .hero h1 { font-size: 26px; }
   .legend { max-width: calc(100% - 500px); }
   .brand-t small { display: none; }
+  .top { gap: 12px; }
+  .modes button { padding: 0 10px; }
+  .cities button { padding: 0 12px; font-size: 15px; }
+}
+@media (max-width: 1080px) and (min-width: 901px) {
+  .modes button span { display: none; }
 }
 @media (max-width: 900px) {
   html, body { font-size: 16px; }
   .app { position: static; display: block; }
-  .top { position: sticky; top: 0; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .top { position: relative; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .modes { order: 2; width: 100%; }
+  .modes button { flex: 1; justify-content: center; }
   .top { flex-wrap: wrap; }
   .brand { flex: 1 1 0; min-width: 0; }
   .brand-t { min-width: 0; }
@@ -206,6 +283,12 @@ body.loading .panel .sec:not(.water) { opacity: .45; transition: opacity .3s; }
   .cards3 .lc:first-child { grid-column: 1 / -1; }
   .kpis { grid-template-columns: 1fr 1fr; }
   .lvl-num b { font-size: 44px; }
+  .cl-big b { font-size: 46px; }
+  .lg-bar, .lg-ticks { width: 200px; }
+  .cmk b { padding: 2px 6px; font-size: 14px; border-radius: 8px; }
+  .cmk b small { display: none; }
+  .cmk span { padding: 0 5px; font-size: 13px; }
+  .cmk.on { transform: scale(1.08); }
 }
 @media (max-width: 380px) {
   .lvl { flex-direction: column; align-items: stretch; }

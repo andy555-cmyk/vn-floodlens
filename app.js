@@ -12,8 +12,10 @@
 
   const S = {
     lang: pickLang(), city: ORDER.includes(qs.get('city')) ? qs.get('city') : 'hcm',
-    lv: 0, lvShown: -1, listType: 'hospital', cities: null, data: {}, live: {}, roadsOn: true, is3d: false
+    lv: 0, lvShown: -1, listType: 'hospital', cities: null, data: {}, live: {}, roadsOn: true, is3d: false,
+    mode: ['air', 'heat'].includes(qs.get('mode')) ? qs.get('mode') : 'flood', floodCity: null
   };
+  const FLOOD_LAYERS = ['flood', 'bbox', 'roads', 'roads-glow', 'pois', 'pois-wet', 'poi-halo'];
 
   function pickLang() {
     const q = qs.get('lang'); if (I[q]) return q;
@@ -314,12 +316,23 @@
       map.on('mouseleave', id, () => { map.getCanvas().style.cursor = ''; pop.remove(); });
     });
     map.on('click', async e => {
+      if (S.mode !== 'flood') {
+        if (openPop) openPop.remove();
+        const h = CL.probe(e.lngLat.lng, e.lngLat.lat);
+        if (h) { openPop = new maplibregl.Popup({ offset: 8, className: 'pop', maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(h).addTo(map); ripple(e.point); }
+        return;
+      }
       const hit = map.queryRenderedFeatures(e.point, { layers: ['pois-wet', 'pois'] });
       if (hit.length) { pop.remove(); openPoi(hit[0].properties, hit[0].geometry.coordinates); return; }
       inspect([e.lngLat.lng, e.lngLat.lat]);
     });
     pulse();
-    selectCity(S.city, true);
+    CL.init({
+      map, S, t, fmt, esc, $, $$, loc, MOTION, getJson, vnNow, lat2y, y2lat, firstSymbol,
+      padding: () => padding(true), setHero, bootDone: () => $('#boot').classList.add('gone'),
+      pickCity: k => { if (k !== S.city) selectCity(k); }
+    });
+    setMode(S.mode, true);
   }
   function fc(f) { return { type: 'FeatureCollection', features: f }; }
   function wetFilter(lv, poi) {
@@ -376,8 +389,10 @@
   /* ---------------- 도시 고르기 ---------------- */
   let loadSeq = 0;
   async function selectCity(key, first) {
-    S.city = key; const seq = ++loadSeq;
-    renderCities();
+    S.city = key;
+    renderCities(); syncUrl();
+    if (S.mode !== 'flood') { if (openPop) openPop.remove(); CL.onCity(); return; }
+    const seq = ++loadSeq;
     const c = S.cities[key];
     $('#lv').max = MAXLV[key];
     $('.ticks').innerHTML = Array.from({ length: 7 }, (_, i) => `<span>${fmt(MAXLV[key] * i / 6, MAXLV[key] % 6 ? 1 : 0)}${i === 6 ? ' m' : ''}</span>`).join('');
@@ -386,11 +401,12 @@
     const pad = padding();
     map.flyTo({ center: c.center, zoom: c.zoom - (innerWidth < 900 ? 0.6 : 0), duration: MOTION ? (first ? 3800 : 2200) : 0, padding: pad, essential: true, pitch: S.is3d ? 55 : 0 });
     const [D, L] = await Promise.all([prepareCity(key), loadLive(key).catch(() => ({}))]);
-    if (seq !== loadSeq) return;
+    if (seq !== loadSeq || S.mode !== 'flood') return;
     const [w, s, e, n] = c.bbox;
     map.getSource('bbox').setData(fc([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] } }]));
     map.getSource('pois').setData(fc(D.pois.map(p => ({ type: 'Feature', properties: { t: p.t, n: p.n, e: p.e, i: p.i }, geometry: { type: 'Point', coordinates: p.c } }))));
     map.getSource('roads').setData(fc(D.segs.filter(s => s.e > 0 && s.e <= MAXLV[key]).map(s => ({ type: 'Feature', properties: { e: s.e }, geometry: { type: 'LineString', coordinates: s.c } }))));
+    S.floodCity = key;
     document.body.classList.remove('loading');
     $('#boot').classList.add('gone');
     renderLive(); renderHero(); renderSources();
@@ -401,9 +417,51 @@
     setLevel(0, true); updateImpact();
     setTimeout(() => animateTo(startLv, first ? 2600 : 1800), first && MOTION ? 2400 : 300);
   }
-  function padding() {
-    if (innerWidth < 900) return { top: 20, bottom: 20, left: 20, right: 20 };
-    return { top: 140, bottom: 40, left: 40, right: 500 };
+  function padding(wide) {
+    // 전국 보기는 머리 카드·범례에 가리지 않게 실제 높이만큼 비운다
+    const hh = $('#hero').offsetHeight, lh = $('#legend').offsetHeight;
+    if (innerWidth < 900) return wide ? { top: hh + 34, bottom: lh + 30, left: 40, right: 70 } : { top: 20, bottom: 20, left: 20, right: 20 };
+    const r = innerWidth <= 1240 ? 446 : 500;
+    return wide ? { top: 40, bottom: 40, left: Math.min(660, innerWidth - r - 300), right: r + 90 } : { top: 140, bottom: 40, left: 40, right: r };
+  }
+
+  /* ---------------- 모드 ---------------- */
+  function setMode(m, first) {
+    const prev = first ? null : S.mode;
+    S.mode = m;
+    document.body.dataset.mode = m;
+    $$('#modes [data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === m); b.setAttribute('aria-selected', b.dataset.mode === m); });
+    syncUrl();
+    if (openPop) openPop.remove();
+    if (m === 'flood') {
+      CL.leave();
+      FLOOD_LAYERS.forEach(id => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', (id === 'roads' || id === 'roads-glow') && !S.roadsOn ? 'none' : 'visible'));
+      renderLegend();
+      if (S.floodCity === S.city && S.data[S.city]) {
+        renderHero(); renderSources();
+        const c = S.cities[S.city];
+        map.flyTo({ center: c.center, zoom: c.zoom - (innerWidth < 900 ? 0.6 : 0), duration: MOTION ? 1800 : 0, padding: padding(), essential: true });
+      } else selectCity(S.city, first);
+    } else {
+      if (prev === 'flood' || first) {
+        FLOOD_LAYERS.forEach(id => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', 'none'));
+        if (S.is3d) $('#btn3d').click();
+      }
+      CL.enter(m, first);
+    }
+  }
+  function syncUrl() {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('city', S.city);
+      if (S.mode === 'flood') u.searchParams.delete('mode'); else u.searchParams.set('mode', S.mode);
+      history.replaceState(null, '', u);
+    } catch (e) {}
+  }
+  function setHero(h, s) {
+    const hero = $('#hero');
+    hero.classList.remove('in'); void hero.offsetWidth; hero.classList.add('in');
+    $('#headline').innerHTML = h; $('#subline').textContent = s;
   }
 
   /* ---------------- 물 높이 ---------------- */
@@ -504,9 +562,7 @@
       h = t('hInland', { city, m: `<em>${fmt(D.median, 0)}</em>` });
       s = t('sInland');
     }
-    const hero = $('#hero');
-    hero.classList.remove('in'); void hero.offsetWidth; hero.classList.add('in');
-    $('#headline').innerHTML = h; $('#subline').textContent = s;
+    setHero(h, s);
   }
   function placeTideMark() {
     const L = S.live[S.city] || {}, m = $('#tideMark');
@@ -519,6 +575,7 @@
     const D = S.data[S.city];
     const d = D && D.osmDate ? D.osmDate.slice(0, 4) + '-' + D.osmDate.slice(4, 6) + '-' + D.osmDate.slice(6, 8) : '';
     $('#srcs').innerHTML = ['src1', 'src2', 'src3', 'src4'].map(k => `<li>${esc(t(k, { d }))}</li>`).join('');
+    $('#caveat').textContent = t('caveat');
   }
   function renderLegend() {
     $('#legend').innerHTML = `
@@ -531,13 +588,15 @@
     $$('[data-lang]').forEach(b => b.classList.toggle('on', b.dataset.lang === S.lang));
     try { localStorage.setItem('fl-lang', S.lang); } catch (e) {}
     if (S.cities) renderCities();
-    renderLegend();
     if (map && map.isStyleLoaded()) localize();
-    if (S.data[S.city]) { renderLive(); renderHero(); renderSources(); placeTideMark(); updateImpact(); $('#lvNum').textContent = fmt(S.lv, 1); }
+    const fl = S.mode === 'flood';
+    if (fl) renderLegend(); else CL.onLang();
+    if (S.data[S.city] && S.floodCity === S.city) { renderLive(); placeTideMark(); updateImpact(); $('#lvNum').textContent = fmt(S.lv, 1); if (fl) { renderHero(); renderSources(); } }
   }
 
   /* ---------------- 조작 ---------------- */
   $$('[data-lang]').forEach(b => b.addEventListener('click', () => { S.lang = b.dataset.lang; applyLang(); }));
+  $$('#modes [data-mode]').forEach(b => b.addEventListener('click', () => { if (map && booted && b.dataset.mode !== S.mode) setMode(b.dataset.mode); }));
   $('#lv').addEventListener('input', e => { cancelAnimationFrame(raf); anim++; setLevel(+e.target.value); });
   $('#lv').addEventListener('change', () => updateImpact());
   $('#btnPlay').addEventListener('click', () => { setLevel(0, true); updateImpact(); setTimeout(() => animateTo(MAXLV[S.city], 6500), 150); });
@@ -565,6 +624,8 @@
   Object.assign(I.vi, { listWet: '{n} {type} bị ngập', listNoneT: 'Không có {type} bị ngập ở mực nước này' });
   Object.assign(I.en, { listWet: '{n} {type} under water', listNoneT: 'No {type} under water at this level' });
 
+  document.body.dataset.mode = S.mode;
+  $$('#modes [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
   applyLang();
   fetch('data/cities.json').then(r => r.json()).then(c => { S.cities = c; renderCities(); initMap(); });
   window.__fl = { S, setLevel, animateTo, selectCity, elevAt, landBelow };
